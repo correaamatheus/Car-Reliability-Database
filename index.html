@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMW Engine Reliability Database</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .card-shadow { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        .reliability-badge { padding: 4px 10px; border-radius: 9999px; font-weight: 700; font-size: 0.9rem; }
+        
+        /* Custom styling for the select dropdown to hide default arrow */
+        .select-wrapper {
+            position: relative;
+        }
+        .select-wrapper select {
+            appearance: none; 
+            -webkit-appearance: none; 
+            -moz-appearance: none;
+            padding-right: 2.5rem; 
+        }
+        .select-wrapper .custom-arrow {
+            position: absolute;
+            top: 50%;
+            right: 1rem;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+        /* Style for the new specs list */
+        .spec-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .spec-item:last-child {
+            border-bottom: none;
+        }
+        .spec-label {
+            font-size: 0.875rem; 
+            font-weight: 500;
+            color: #4b5563; 
+        }
+        .spec-value {
+            font-size: 0.875rem; 
+            font-weight: 700; 
+            color: #2563eb; 
+        }
+        /* Modal Styles */
+        .modal-content {
+            max-height: 90vh; /* Ensure it fits on smaller screens */
+        }
+
+        /* --- AI ASSISTANT STYLES --- */
+        #assistant-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            cursor: pointer;
+            width: 60px;
+            height: 60px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        #assistant-button:hover {
+            transform: scale(1.05);
+        }
+        #chat-window {
+            position: fixed;
+            bottom: 90px;
+            right: 20px;
+            width: 90vw; /* Default for mobile */
+            max-width: 380px; /* Max width for desktop */
+            height: 70vh;
+            max-height: 500px;
+            z-index: 999;
+            transform: scale(0.95);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+        }
+        #chat-window.open {
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #chat-messages {
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .user-message {
+            background-color: #dbeafe; /* Blue-100 */
+            align-self: flex-end;
+            border-radius: 12px 12px 0 12px;
+        }
+        .ai-message {
+            background-color: #ffffff; /* White */
+            align-self: flex-start;
+            border-radius: 12px 12px 12px 0;
+        }
+        /* Adjust for smaller screens */
+        @media (min-width: 640px) {
+            #chat-window {
+                width: 380px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-blue-800">BMW Engine Reliability Database</h1>
+            <p class="text-lg text-gray-600 mt-2">Interactive score card of iconic models, specs, and common issues.</p>
+        </header>
+
+        <!-- Search and Sort Controls -->
+        <div class="bg-white p-6 rounded-xl card-shadow mb-8 flex flex-col space-y-4 items-center">
+            
+            <!-- Search Bar and Filters Grid -->
+            <div class="w-full grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                
+                <!-- Search Bar (Full Width on Mobile) -->
+                <div class="relative md:col-span-3 lg:col-span-2">
+                    <input type="text" id="searchInput" placeholder="Search by Engine, Model, or Generation..." class="w-full p-3 pl-10 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition" oninput="updateDisplay()">
+                    <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                </div>
+
+                <!-- Sort Dropdown -->
+                <div class="select-wrapper w-full">
+                    <select id="sortModels" class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500 transition" onchange="updateDisplay()">
+                        <option value="year_desc">Sort by Year (Newest)</option>
+                        <option value="year_asc">Sort by Year (Oldest)</option>
+                        <option value="reliability_desc">Sort by Reliability (High)</option>
+                        <option value="reliability_asc">Sort by Reliability (Low)</option>
+                        <option value="name_asc">Sort by Name (A-Z)</option>
+                    </select>
+                    <i class="fas fa-chevron-down custom-arrow text-gray-500"></i>
+                </div>
+
+                <!-- Generation Filter -->
+                <select id="filterGeneration" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition" onchange="updateDisplay()">
+                    <option value="All">All Generations</option>
+                </select>
+
+                <!-- Architecture Filter -->
+                <select id="filterEngine" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition" onchange="updateDisplay()">
+                    <option value="All">All Architectures</option>
+                </select>
+            </div>
+            
+            <!-- Comparison Button (Always at the bottom of controls) -->
+            <div class="w-full flex justify-end">
+                <button onclick="openComparisonModal()" class="bg-indigo-600 text-white p-3 rounded-lg hover:bg-indigo-700 transition font-semibold flex items-center shadow-md">
+                    <i class="fas fa-columns mr-2"></i> Compare Models
+                </button>
+            </div>
+        </div>
+
+        <!-- Model Cards Grid -->
+        <div id="modelGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <!-- Cards will be injected here by JavaScript -->
+        </div>
+
+        <!-- No Results Message -->
+        <div id="noResults" class="hidden text-center p-12 bg-white rounded-xl card-shadow">
+            <i class="fas fa-exclamation-circle text-5xl text-red-500 mb-4"></i>
+            <p class="text-xl font-semibold text-gray-700">No models match your current filters or search query.</p>
+            <p class="text-gray-500 mt-2">Try adjusting your filters or search terms.</p>
+        </div>
+    </div>
+
+    <!-- --- AI ASSISTANT WIDGET --- -->
+    
+    <!-- Chat Button -->
+    <button id="assistant-button" onclick="toggleChat()" class="bg-blue-600 text-white rounded-full flex items-center justify-center">
+        <i id="assistant-icon" class="fas fa-robot text-2xl"></i>
+    </button>
+
+    <!-- Chat Window -->
+    <div id="chat-window" class="bg-gray-100 rounded-xl card-shadow flex flex-col overflow-hidden">
+        <div class="bg-blue-700 text-white p-4 flex justify-between items-center rounded-t-xl">
+            <h3 class="text-lg font-bold">BMW Reliability Assistant</h3>
+            <button onclick="toggleChat()" class="text-white hover:text-gray-200">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <!-- Messages Container -->
+        <div id="chat-messages" class="p-4 space-y-4 flex-grow flex flex-col">
+            <!-- Initial Message -->
+            <div class="ai-message max-w-[85%] p-3 text-sm text-gray-800 self-start shadow-md">
+                Hi! I'm your BMW reliability expert. Ask me about any engine or model in the list, or general BMW facts!
+            </div>
+            <!-- Messages will be injected here -->
+        </div>
+
+        <!-- Input Form -->
+        <div class="p-3 bg-white border-t border-gray-200">
+            <form id="chat-form" onsubmit="handleChatSubmit(event)" class="flex">
+                <input type="text" id="chat-input" placeholder="Ask me anything..." 
+                       class="flex-grow p-3 border border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500" required>
+                <button type="submit" id="send-button" class="bg-blue-600 text-white p-3 rounded-r-lg hover:bg-blue-700 transition">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- --- Model Comparison Modal --- -->
+    <div id="comparisonModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 hidden transition-opacity overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl my-8 modal-content">
+                <!-- Modal Header -->
+                <div class="p-6 border-b flex justify-between items-center sticky top-0 bg-white z-10">
+                    <h2 class="text-2xl font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-chart-line mr-3 text-indigo-600"></i> Model Comparison Tool
+                    </h2>
+                    <button onclick="closeComparisonModal()" class="text-gray-500 hover:text-gray-800 transition">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <!-- Modal Body (Selection & Results) -->
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <!-- Model A Selection -->
+                        <div class="select-wrapper">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Select Model A</label>
+                            <select id="compareSelectA" onchange="renderComparison()" class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-indigo-500 focus:border-indigo-500 transition">
+                                <option value="-1">Select Model A...</option>
+                            </select>
+                            <i class="fas fa-chevron-down custom-arrow text-gray-500"></i>
+                        </div>
+
+                        <!-- Model B Selection -->
+                        <div class="select-wrapper">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Select Model B</label>
+                            <select id="compareSelectB" onchange="renderComparison()" class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-indigo-500 focus:border-indigo-500 transition">
+                                <option value="-1">Select Model B...</option>
+                            </select>
+                            <i class="fas fa-chevron-down custom-arrow text-gray-500"></i>
+                        </div>
+                    </div>
+
+                    <!-- Comparison Results Container -->
+                    <div id="comparisonResults" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="lg:col-span-2 text-center p-12 text-gray-500 bg-gray-50 rounded-lg">
+                            <i class="fas fa-list-ul text-3xl mb-3"></i>
+                            <p class="font-semibold">Select two BMW models above to view a side-by-side comparison of their stats and known issues.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- JavaScript Logic -->
+<script>
+        const bmwData = [
+            // --- E-SERIES: ICONIC US MODELS ADDED ---
+            
+            // E36 (1992-1999) - Workhorse I6 and US-Spec M3
+            { name: '325i Sedan/Coupe', generation: 'E36', year: 1993, architecture: 'I6', engine: 'M50TU', aspiration: 'Naturally Aspirated', hp: 189, torque: 181, cityMpg: 19, highwayMpg: 27, topSpeed: 130, reliability: 9.5, issues: ['Cooling system overhaul (radiator/hoses)', 'Suspension bushings', 'Window regulators'], productionRange: '1992-1995' },
+            { name: 'M3 Coupe (US Spec)', generation: 'E36', year: 1996, architecture: 'I6', engine: 'S52', aspiration: 'Naturally Aspirated', hp: 240, torque: 236, cityMpg: 17, highwayMpg: 24, topSpeed: 155, reliability: 9.2, issues: ['Cooling system overhaul', 'Glove box sag', 'Rear subframe reinforcement'], productionRange: '1996-1999' },
+            
+            // E39 (1995-2004) - The most requested models
+            { name: '528i Sedan', generation: 'E39', year: 1999, architecture: 'I6', engine: 'M52TU', aspiration: 'Naturally Aspirated', hp: 193, torque: 207, cityMpg: 18, highwayMpg: 26, topSpeed: 140, reliability: 9.3, issues: ['VANOS seals', 'Cooling system plastic parts', 'Oil filter housing gasket (OFHG)'], productionRange: '1999-2000' },
+            { name: '530i Sedan', generation: 'E39', year: 2001, architecture: 'I6', engine: 'M54', aspiration: 'Naturally Aspirated', hp: 225, torque: 214, cityMpg: 20, highwayMpg: 28, topSpeed: 155, reliability: 9.0, issues: ['DISA valve failure', 'OFHG leaks', 'CCV system clogging'], productionRange: '2001-2003' },
+            { name: '540i Sedan', generation: 'E39', year: 1999, architecture: 'V8', engine: 'M62TU', aspiration: 'Naturally Aspirated', hp: 282, torque: 324, cityMpg: 17, highwayMpg: 23, topSpeed: 155, reliability: 8.4, issues: ['Timing chain guides', 'Valley Pan gasket leak', 'Power steering hose leak'], productionRange: '1999-2003' },
+            { name: 'M5 Sedan', generation: 'E39', year: 1999, architecture: 'V8 (M-Power)', engine: 'S62', aspiration: 'Naturally Aspirated', hp: 400, torque: 369, cityMpg: 13, highwayMpg: 20, topSpeed: 155, reliability: 8.8, issues: ['VANOS solenoids/high-pressure lines', 'Rod bearings (preventative)', 'Driveshaft Guibo'], productionRange: '1999-2003' },
+            
+            // E46 (1999-2006) - Volume Sellers
+            { name: '325i Sedan/Coupe', generation: 'E46', year: 2001, architecture: 'I6', engine: 'M54', aspiration: 'Naturally Aspirated', hp: 184, torque: 175, cityMpg: 21, highwayMpg: 30, topSpeed: 130, reliability: 9.0, issues: ['Cooling system expansion tank/pump', 'Window regulators', 'OFHG leaks'], productionRange: '2001-2005' },
+            { name: '330i ZHP (Performance Pkg)', generation: 'E46', year: 2003, architecture: 'I6', engine: 'M54', aspiration: 'Naturally Aspirated', hp: 235, torque: 222, cityMpg: 20, highwayMpg: 29, topSpeed: 155, reliability: 8.9, issues: ['Subframe cracking (rare)', 'DISA valve', 'CCV system'], productionRange: '2003-2006' },
+            { name: 'E46 M3', generation: 'E46', year: 2000, architecture: 'I6 (M-Power)', engine: 'S54', aspiration: 'Naturally Aspirated', hp: 333, torque: 262, cityMpg: 14, highwayMpg: 20, topSpeed: 155, reliability: 8.8, issues: ['Rod bearing wear', 'VANOS solenoids', 'Subframe failure'], productionRange: '2000-2006' },
+            
+            // E90/E92 (2006-2013) - The N5x Generation
+            { name: '328i Sedan/Coupe', generation: 'E90/E92', year: 2007, architecture: 'I6', engine: 'N52', aspiration: 'Naturally Aspirated', hp: 230, torque: 200, cityMpg: 20, highwayMpg: 30, topSpeed: 130, reliability: 9.4, issues: ['Electric water pump failure', 'Valve cover gasket leaks', 'Oil pan gasket leaks'], productionRange: '2007-2013' },
+            { name: '335i Sedan/Coupe', generation: 'E90/E92', year: 2007, architecture: 'I6', engine: 'N54', aspiration: 'Twin-Turbocharged', hp: 300, torque: 300, cityMpg: 18, highwayMpg: 26, topSpeed: 155, reliability: 6.5, issues: ['HPFP failure', 'Injector failure', 'Wastegate rattles'], productionRange: '2007-2010' },
+            { name: 'E92 M3', generation: 'E92', year: 2007, architecture: 'V8 (M-Power)', engine: 'S65', aspiration: 'Naturally Aspirated', hp: 414, torque: 295, cityMpg: 13, highwayMpg: 19, topSpeed: 155, reliability: 8.5, issues: ['Rod bearing wear', 'Throttle actuators'], productionRange: '2007-2013' },
+
+            // --- F/G-SERIES (Modern Models - Existing for comparison) ---
+            { name: '535i Sedan', generation: 'E60', year: 2008, architecture: 'I6', engine: 'N54', aspiration: 'Twin-Turbocharged', hp: 300, torque: 300, cityMpg: 17, highwayMpg: 25, topSpeed: 155, reliability: 6.5, issues: ['HPFP failure', 'Injector failure', 'Wastegate rattles', 'Oil cooler gasket leaks'], productionRange: '2008-2010' },
+            { name: 'M5 Sedan', generation: 'E60', year: 2005, architecture: 'V10 (M-Power)', engine: 'S85', aspiration: 'Naturally Aspirated', hp: 500, torque: 384, cityMpg: 11, highwayMpg: 17, topSpeed: 155, reliability: 6.0, issues: ['Rod bearings failure', 'SMG hydraulic pump failure', 'Throttle actuators', 'VANOS pump'], productionRange: '2005-2010' },
+            { name: '530i Sedan', generation: 'E60', year: 2006, architecture: 'I6', engine: 'N52', aspiration: 'Naturally Aspirated', hp: 255, torque: 220, cityMpg: 20, highwayMpg: 30, topSpeed: 155, reliability: 8.7, issues: ['Electric water pump failure', 'Valve cover gasket leaks', 'Eccentric shaft sensor leak'], productionRange: '2006-2008' },
+            
+            // F-Series
+            { name: '435i Coupe', generation: 'F32', year: 2014, architecture: 'I6', engine: 'N55', aspiration: 'Turbocharged', hp: 300, torque: 300, cityMpg: 20, highwayMpg: 30, topSpeed: 155, reliability: 9.1, issues: ['Valve cover leaks', 'Oil filter housing leaks'], productionRange: '2014-2016' },
+            { name: '340i Sedan', generation: 'F30', year: 2016, architecture: 'I6', engine: 'B58', aspiration: 'Turbocharged', hp: 320, torque: 330, cityMpg: 22, highwayMpg: 33, topSpeed: 155, reliability: 9.6, issues: ['Minor oil filter housing leaks', 'PCV valve issues'], productionRange: '2016-2018' },
+            { name: 'M4 Coupe', generation: 'F82', year: 2014, architecture: 'I6 (M-Power)', engine: 'S55', aspiration: 'Twin-Turbocharged', hp: 425, torque: 406, cityMpg: 17, highwayMpg: 24, topSpeed: 155, reliability: 8.2, issues: ['Crank hub spun', 'Minor turbo oil line leaks'], productionRange: '2014-2020' },
+            { name: 'M5 Sedan', generation: 'F10', year: 2012, architecture: 'V8 (M-Power)', engine: 'S63', aspiration: 'Twin-Turbocharged', hp: 560, torque: 502, cityMpg: 15, highwayMpg: 22, topSpeed: 155, reliability: 7.0, issues: ['Turbo oil feed lines', 'Throttle actuators', 'Oil consumption'], productionRange: '2012-2016' },
+            { name: '535i Sedan', generation: 'F10', year: 2011, architecture: 'I6', engine: 'N55', aspiration: 'Turbocharged', hp: 300, torque: 300, cityMpg: 20, highwayMpg: 30, topSpeed: 155, reliability: 9.0, issues: ['Valve cover gasket leaks', 'Oil filter housing leaks', 'PCV valve issues'], productionRange: '2011-2016' },
+            
+            // G-Series
+            { name: 'M3 Competition', generation: 'G80', year: 2021, architecture: 'I6 (M-Power)', engine: 'S58', aspiration: 'Twin-Turbocharged', hp: 503, torque: 479, cityMpg: 16, highwayMpg: 23, topSpeed: 180, reliability: 9.4, issues: ['Break-in service required', 'Thermostat issues'], productionRange: '2021-Present' },
+            { name: '330i Sedan', generation: 'G20', year: 2019, architecture: 'I4', engine: 'B48', aspiration: 'Turbocharged', hp: 255, torque: 295, cityMpg: 26, highwayMpg: 36, topSpeed: 155, reliability: 9.7, issues: ['Coolant leak from auxiliary radiator'], productionRange: '2019-Present' },
+            { name: '540i Sedan', generation: 'G30', year: 2017, architecture: 'I6', engine: 'B58', aspiration: 'Turbocharged', hp: 335, torque: 332, cityMpg: 23, highwayMpg: 30, topSpeed: 155, reliability: 9.6, issues: ['Water pump failures', 'Thermostat replacement'], productionRange: '2017-Present' },
+            
+            // V12 & Z Cars
+            { name: 'Z4 M40i', generation: 'G29', year: 2019, architecture: 'I6', engine: 'B58', aspiration: 'Turbocharged', hp: 382, torque: 369, cityMpg: 25, highwayMpg: 32, topSpeed: 155, reliability: 9.6, issues: ['Infotainment software bugs', 'Oil filter housing leaks'], productionRange: '2019-Present' },
+            { name: '760i (V12)', generation: 'E65', year: 2003, architecture: 'V12', engine: 'N73', aspiration: 'Naturally Aspirated', hp: 438, torque: 490, cityMpg: 12, highwayMpg: 18, topSpeed: 155, reliability: 5.0, issues: ['Extreme electronic complexity', 'Coolant pipe leaks (Valley Pan)', 'Oil leaks'], productionRange: '2003-2008' },
+        ];
+        
+        // --- Utility Functions (Existing) ---
+
+        function getReliabilityColor(score) {
+            if (score >= 9.0) return 'bg-green-600 text-white';
+            if (score >= 8.0) return 'bg-lime-500 text-gray-800';
+            if (score >= 7.0) return 'bg-yellow-400 text-gray-800';
+            return 'bg-red-500 text-white';
+        }
+
+        // Modified createCardHTML to accept an optional full-width flag for the comparison tool
+        function createCardHTML(model, isComparison = false) {
+            if (!model) return '';
+            const issuesList = model.issues.map(issue => `<li class="text-sm text-gray-600 truncate"><i class="fas fa-wrench mr-2 text-red-400"></i>${issue}</li>`).join('');
+            const scoreColor = getReliabilityColor(model.reliability);
+            
+            // Create a dynamic placeholder image URL for the car
+            const imageUrl = `https://placehold.co/600x400/1f2937/ffffff?text=${encodeURIComponent(model.name.replace(/\s/g, '+'))}`;
+
+            // Adjust card classes for the comparison view
+            const cardClasses = isComparison 
+                ? 'bg-white rounded-xl overflow-hidden shadow-lg flex flex-col'
+                : 'bg-white rounded-xl overflow-hidden card-shadow hover:shadow-xl transition duration-300 transform hover:-translate-y-1 flex flex-col';
+
+
+            return `
+                <div class="${cardClasses}">
+                    
+                    <!-- Image and Title Section -->
+                    <div class="relative w-full h-auto">
+                        <img src="${imageUrl}" 
+                             alt="${model.name}" 
+                             class="w-full h-40 object-cover" 
+                             onerror="this.onerror=null;this.src='https://placehold.co/600x400/d1d5db/4b5563?text=Image+Unavailable';"
+                        >
+                        <!-- Title Overlay (Bottom Left) -->
+                        <div class="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 to-transparent/10">
+                            <h2 class="text-xl font-extrabold text-white leading-none drop-shadow-lg">${model.name}</h2>
+                            <span class="text-xs font-medium text-gray-300">${model.generation} | ${model.productionRange}</span>
+                        </div>
+                    </div>
+
+                    <div class="p-5 flex-grow">
+                        
+                        <!-- Reliability Badge -->
+                        <div class="flex items-center mb-4">
+                            <span class="reliability-badge ${scoreColor}">${model.reliability.toFixed(1)} / 10</span>
+                            <span class="ml-3 text-sm font-semibold text-gray-700">Reliability Score</span>
+                        </div>
+
+                        <!-- Specs List -->
+                        <div class="border-t pt-4 space-y-1">
+                            <div class="spec-item">
+                                <span class="spec-label">Engine Architecture</span>
+                                <span class="spec-value">${model.architecture}</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">Engine Code</span>
+                                <span class="spec-value">${model.engine}</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">Aspiration</span>
+                                <span class="spec-value">${model.aspiration}</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">Horsepower (HP)</span>
+                                <span class="spec-value">${model.hp}</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">Torque (lb-ft)</span>
+                                <span class="spec-value">${model.torque}</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">City MPG</span>
+                                <span class="spec-value">${model.cityMpg}</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">Highway MPG</span>
+                                <span class="spec-value">${model.highwayMpg}</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">Top Speed (MPH)</span>
+                                <span class="spec-value">${model.topSpeed}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Issues List -->
+                        <div class="mt-4 border-t pt-4">
+                            <h3 class="text-sm font-bold text-red-600 mb-2">Common Issues:</h3>
+                            <ul class="space-y-1">
+                                ${issuesList}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderModels(data) {
+            const grid = document.getElementById('modelGrid');
+            const noResults = document.getElementById('noResults');
+            // Use the base createCardHTML function for the main grid
+            grid.innerHTML = data.map(model => createCardHTML(model, false)).join('');
+            
+            if (data.length === 0) {
+                grid.classList.add('hidden');
+                noResults.classList.remove('hidden');
+            } else {
+                grid.classList.remove('hidden');
+                noResults.classList.add('hidden');
+            }
+        }
+
+        function updateDisplay() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const generationFilter = document.getElementById('filterGeneration').value;
+            const architectureFilter = document.getElementById('filterEngine').value; 
+            const sortValue = document.getElementById('sortModels').value;
+            const [key, direction] = sortValue.split('_');
+
+            // 1. FILTER the data from the source (bmwData)
+            let filteredData = bmwData.filter(model => {
+                const searchMatch = (
+                    model.name.toLowerCase().includes(query) ||
+                    model.engine.toLowerCase().includes(query) ||
+                    model.generation.toLowerCase().includes(query) ||
+                    model.architecture.toLowerCase().includes(query) ||
+                    model.aspiration.toLowerCase().includes(query) 
+                );
+                
+                const generationMatch = generationFilter === 'All' || model.generation === generationFilter;
+                const architectureMatch = architectureFilter === 'All' || model.architecture === architectureFilter;
+                
+                return searchMatch && generationMatch && architectureMatch;
+            });
+
+            // 2. SORT the filtered data
+            filteredData.sort((a, b) => {
+                let valA, valB;
+
+                if (key === 'name') {
+                    valA = a.name.toLowerCase();
+                    valB = b.name.toLowerCase();
+                    return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); 
+                } else if (key === 'reliability' || key === 'year') {
+                    valA = a[key];
+                    valB = b[key];
+                    return direction === 'asc' ? valA - valB : valB - valA;
+                }
+                return 0;
+            });
+
+            // 3. RENDER the result
+            renderModels(filteredData);
+        }
+
+        function populateFilterOptions() {
+            // Generation Filter
+            const uniqueGenerations = new Set(bmwData.map(d => d.generation));
+            const genSelect = document.getElementById('filterGeneration');
+            genSelect.innerHTML = '<option value="All">All Generations</option>'; 
+            [...uniqueGenerations].sort().forEach(gen => {
+                genSelect.innerHTML += `<option value="${gen}">${gen}</option>`;
+            });
+
+            // Architecture Filter
+            const uniqueArchitectures = new Set(bmwData.map(d => d.architecture));
+            const archSelect = document.getElementById('filterEngine');
+            archSelect.innerHTML = '<option value="All">All Architectures</option>'; 
+            [...uniqueArchitectures].sort().forEach(arch => {
+                archSelect.innerHTML += `<option value="${arch}">${arch}</option>`;
+            });
+        }
+        
+        // --- COMPARISON TOOL LOGIC ---
+
+        function populateComparisonOptions() {
+            const selectA = document.getElementById('compareSelectA');
+            const selectB = document.getElementById('compareSelectB');
+            
+            // Clear existing options, but keep the default placeholder (value -1)
+            selectA.querySelectorAll('option:not([value="-1"])').forEach(opt => opt.remove());
+            selectB.querySelectorAll('option:not([value="-1"])').forEach(opt => opt.remove());
+
+            bmwData.forEach((model, index) => {
+                const optionText = `${model.name} (${model.generation})`;
+                const optionValue = index.toString(); 
+
+                const optionA = document.createElement('option');
+                optionA.value = optionValue;
+                optionA.textContent = optionText;
+                selectA.appendChild(optionA);
+
+                const optionB = document.createElement('option');
+                optionB.value = optionValue;
+                optionB.textContent = optionText;
+                selectB.appendChild(optionB);
+            });
+            
+            // Reset selection to prevent comparing the same model after population
+            selectA.value = "-1";
+            selectB.value = "-1";
+            renderComparison();
+        }
+
+        function openComparisonModal() {
+            populateComparisonOptions();
+            document.getElementById('comparisonModal').classList.remove('hidden');
+        }
+
+        function closeComparisonModal() {
+            document.getElementById('comparisonModal').classList.add('hidden');
+        }
+
+        function renderComparison() {
+            const indexA = parseInt(document.getElementById('compareSelectA').value);
+            const indexB = parseInt(document.getElementById('compareSelectB').value);
+            const resultsContainer = document.getElementById('comparisonResults');
+            
+            resultsContainer.innerHTML = '';
+
+            const modelA = bmwData[indexA] || null;
+            const modelB = bmwData[indexB] || null;
+
+            if (modelA && modelB) {
+                // Render both models side-by-side (using isComparison = true for smaller cards)
+                resultsContainer.innerHTML = 
+                    `<div class="model-card-A">${createCardHTML(modelA, true)}</div>` +
+                    `<div class="model-card-B">${createCardHTML(modelB, true)}</div>`;
+            } else if (modelA || modelB) {
+                // If only one model is selected, show a message
+                const selectedModel = modelA || modelB;
+                resultsContainer.innerHTML = `
+                    <div class="lg:col-span-2 text-center p-12 text-gray-500 bg-gray-50 rounded-lg">
+                        <i class="fas fa-arrow-up text-3xl mb-3"></i>
+                        <p class="font-semibold">You have selected ${selectedModel.name}. Please select a second model above to compare.</p>
+                    </div>
+                `;
+            } else {
+                 // Initial state message
+                resultsContainer.innerHTML = `
+                    <div class="lg:col-span-2 text-center p-12 text-gray-500 bg-gray-50 rounded-lg">
+                        <i class="fas fa-list-ul text-3xl mb-3"></i>
+                        <p class="font-semibold">Select two BMW models above to view a side-by-side comparison of their stats and known issues.</p>
+                    </div>
+                `;
+            }
+        }
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            populateFilterOptions();
+            updateDisplay(); 
+        });
+
+
+        // --- AI ASSISTANT LOGIC (Retained for completeness) ---
+
+        const CHAT_HISTORY = [];
+        const chatWindow = document.getElementById('chat-window');
+        const chatMessagesContainer = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const sendButton = document.getElementById('send-button');
+
+        function toggleChat() {
+            chatWindow.classList.toggle('open');
+            const icon = document.getElementById('assistant-icon');
+            if (chatWindow.classList.contains('open')) {
+                icon.classList.remove('fa-robot');
+                icon.classList.add('fa-comment-dots');
+            } else {
+                icon.classList.remove('fa-comment-dots');
+                icon.classList.add('fa-robot');
+            }
+        }
+
+        function displayMessage(text, role, sources = []) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add(
+                'max-w-[85%]', 'p-3', 'text-sm', 'shadow-md', 'break-words'
+            );
+            
+            // Apply role-specific classes
+            if (role === 'user') {
+                messageElement.classList.add('user-message', 'text-gray-800', 'self-end');
+            } else if (role === 'ai') {
+                messageElement.classList.add('ai-message', 'text-gray-800', 'self-start');
+            }
+            
+            messageElement.innerHTML = text.replace(/\n/g, '<br>');
+
+            // Add sources if available
+            if (sources.length > 0) {
+                const sourcesDiv = document.createElement('div');
+                sourcesDiv.classList.add('mt-2', 'pt-2', 'border-t', 'border-gray-300', 'text-xs', 'text-gray-600', 'font-medium');
+                sourcesDiv.innerHTML = '<strong>Sources:</strong> ' + sources.map((s, index) => 
+                    `<a href="${s.uri}" target="_blank" class="text-blue-500 hover:underline">${index + 1}</a>`
+                ).join(', ');
+                messageElement.appendChild(sourcesDiv);
+            }
+
+            chatMessagesContainer.appendChild(messageElement);
+            // Scroll to the latest message
+            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+        }
+
+        function setChatLoading(isLoading) {
+            chatInput.disabled = isLoading;
+            sendButton.disabled = isLoading;
+            sendButton.innerHTML = isLoading 
+                ? '<i class="fas fa-spinner fa-spin"></i>'
+                : '<i class="fas fa-paper-plane"></i>';
+            chatInput.placeholder = isLoading ? 'Thinking...' : 'Ask me anything...';
+        }
+
+        async function handleChatSubmit(event) {
+            event.preventDefault();
+            const userQuery = chatInput.value.trim();
+            if (!userQuery) return;
+
+            displayMessage(userQuery, 'user');
+            CHAT_HISTORY.push({ role: "user", parts: [{ text: userQuery }] });
+            chatInput.value = '';
+            setChatLoading(true);
+
+            try {
+                // Prepend the internal data to the user query for context
+                const internalDataSummary = JSON.stringify(bmwData.map(m => ({
+                    model: m.name, engine: m.engine, year: m.year, reliability: m.reliability, issues: m.issues.join(', '), aspiration: m.aspiration
+                })));
+                
+                const finalQuery = `The user is asking this question: "${userQuery}". You have access to this internal database of BMW models/issues: ${internalDataSummary}. Use this internal data primarily, and use Google Search for general facts about BMW.`;
+
+                const response = await callGeminiApi(finalQuery);
+                displayMessage(response.text, 'ai', response.sources);
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                displayMessage("Sorry, I ran into an error trying to get that information. Please try again.", 'ai');
+            } finally {
+                setChatLoading(false);
+            }
+        }
+
+        async function callGeminiApi(userQuery, maxRetries = 3) {
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            
+            const systemPrompt = `You are a friendly, concise, and highly knowledgeable BMW Specialist and reliability expert. You must answer questions about the engines/models listed in the provided internal database. For any general BMW history, news, or external context, use Google Search grounding. When referencing specific reliability scores or issues, you must cite the internal data you were given. Keep your answers brief and focused.`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                tools: [{ "google_search": {} }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+            };
+
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429 && attempt < maxRetries - 1) {
+                            const delay = Math.pow(2, attempt) * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue; // Retry
+                        }
+                        throw new Error(`API returned status ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+
+                    if (!candidate || !candidate.content?.parts?.[0]?.text) {
+                        throw new Error("Invalid or empty response from API.");
+                    }
+                    
+                    const text = candidate.content.parts[0].text;
+                    let sources = [];
+                    const groundingMetadata = candidate.groundingMetadata;
+
+                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                        sources = groundingMetadata.groundingAttributions
+                            .map(attribution => ({
+                                uri: attribution.web?.uri,
+                                title: attribution.web?.title,
+                            }))
+                            .filter(source => source.uri && source.title);
+                    }
+
+                    return { text, sources };
+
+                } catch (error) {
+                    if (attempt === maxRetries - 1) {
+                        throw error; // Re-throw final error
+                    }
+                    // For non-429 errors or connection issues, retry with backoff
+                    const delay = Math.pow(2, attempt) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+    </script>
+
+</body>
+</html>
